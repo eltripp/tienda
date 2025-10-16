@@ -1,0 +1,325 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  SHIPPED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id             String            @id @default(cuid())
+  name           String?
+  email          String?           @unique
+  emailVerified  DateTime?
+  image          String?
+  passwordHash   String?
+  role           UserRole          @default(CUSTOMER)
+  loyaltyPoints  Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  accounts       Account[]
+  sessions       Session[]
+  addresses      Address[]
+  orders         Order[]
+  paymentMethods PaymentMethod[]
+  cart           Cart?
+  discounts      UserDiscount[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+  oauth_token_secret String?
+  oauth_token        String?
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Address {
+  id             String    @id @default(cuid())
+  label          String?
+  fullName       String
+  street         String
+  street2        String?
+  city           String
+  state          String?
+  postalCode     String
+  country        String
+  phone          String?
+  isDefault      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  userId         String
+  regionId       String?
+  communeId      String?
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  region         ShippingRegion? @relation(fields: [regionId], references: [id])
+  commune        Commune?  @relation(fields: [communeId], references: [id])
+  shippingOrders Order[]   @relation("OrderShippingAddress")
+  billingOrders  Order[]   @relation("OrderBillingAddress")
+}
+
+model ShippingRegion {
+  id               String     @id @default(cuid())
+  name             String
+  code             String     @unique
+  baseCost         Decimal    @db.Decimal(10, 2)
+  perKgCost        Decimal    @db.Decimal(10, 2) @default(0)
+  estimatedMinDays Int        @default(2)
+  estimatedMaxDays Int        @default(5)
+  communes         Commune[]
+  addresses        Address[]
+  orders           Order[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model Commune {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  regionId  String
+  extraCost Decimal? @db.Decimal(10, 2)
+  region    ShippingRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  addresses Address[]
+}
+
+model Category {
+  id          String                  @id @default(cuid())
+  name        String
+  slug        String                  @unique
+  description String?
+  imageUrl    String?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  products    ProductsOnCategories[]
+}
+
+model Brand {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  logoUrl   String?
+  website   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id              String                  @id @default(cuid())
+  name            String
+  slug            String                  @unique
+  description     String
+  highlights      String?
+  price           Decimal                 @db.Decimal(10, 2)
+  compareAtPrice  Decimal?                @db.Decimal(10, 2)
+  stock           Int
+  sku             String                  @unique
+  weight          Decimal?                @db.Decimal(10, 2)
+  featured        Boolean                 @default(false)
+  isActive        Boolean                 @default(true)
+  tags            String[]
+  rating          Decimal?                @db.Decimal(3, 2)
+  reviewCount     Int                     @default(0)
+  brandId         String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  brand           Brand?                  @relation(fields: [brandId], references: [id])
+  categories      ProductsOnCategories[]
+  images          ProductImage[]
+  specifications  ProductSpecification[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  url       String
+  alt       String?
+  width     Int?
+  height    Int?
+  order     Int      @default(0)
+  isPrimary Boolean  @default(false)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductSpecification {
+  id        String   @id @default(cuid())
+  name      String
+  value     String
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductsOnCategories {
+  productId  String
+  categoryId String
+  assignedAt DateTime @default(now())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+}
+
+model Cart {
+  id             String     @id @default(cuid())
+  userId         String?    @unique
+  sessionToken   String?    @unique
+  currency       String     @default("USD")
+  subtotal       Decimal    @db.Decimal(10, 2) @default(0)
+  shippingTotal  Decimal    @db.Decimal(10, 2) @default(0)
+  discountTotal  Decimal    @db.Decimal(10, 2) @default(0)
+  status         String     @default("ACTIVE")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  user           User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items          CartItem[]
+    total          Decimal    @db.Decimal(10, 2) @default(0)
+}
+
+model CartItem {
+  id         String   @id @default(cuid())
+  cartId     String
+  productId  String
+  quantity   Int      @default(1)
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id                String         @id @default(cuid())
+  orderNumber       Int            @unique
+  status            OrderStatus    @default(PENDING)
+  paymentStatus     PaymentStatus  @default(PENDING)
+  subtotal          Decimal        @db.Decimal(10, 2)
+  shippingTotal     Decimal        @db.Decimal(10, 2)
+  discountTotal     Decimal        @db.Decimal(10, 2) @default(0)
+  taxTotal          Decimal        @db.Decimal(10, 2) @default(0)
+  total             Decimal        @db.Decimal(10, 2)
+  notes             String?
+  paymentIntentId   String?
+  stripeCustomerId  String?
+  placedAt          DateTime       @default(now())
+  fulfilledAt       DateTime?
+  userId            String?
+  shippingAddressId String?
+  billingAddressId  String?
+  shippingRegionId  String?
+  user              User?          @relation(fields: [userId], references: [id])
+  shippingAddress   Address?       @relation("OrderShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress    Address?       @relation("OrderBillingAddress", fields: [billingAddressId], references: [id])
+  shippingRegion    ShippingRegion? @relation(fields: [shippingRegionId], references: [id])
+  items             OrderItem[]
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  productId  String
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+}
+
+model PaymentMethod {
+  id                    String   @id @default(cuid())
+  brand                 String?
+  last4                 String?
+  expMonth              Int?
+  expYear               Int?
+  funding               String?
+  stripePaymentMethodId String?
+  stripeCustomerId      String?
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Discount {
+  id            String         @id @default(cuid())
+  name          String
+  description   String?
+  percentage    Int?
+  amount        Decimal?       @db.Decimal(10, 2)
+  minOrderTotal Decimal?       @db.Decimal(10, 2)
+  isAutomatic   Boolean        @default(false)
+  active        Boolean        @default(true)
+  maxUses       Int?
+  uses          Int            @default(0)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users         UserDiscount[]
+}
+
+model UserDiscount {
+  id         String   @id @default(cuid())
+  userId     String
+  discountId String
+  appliedAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, discountId])
+}
