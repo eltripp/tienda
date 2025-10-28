@@ -2,7 +2,8 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/server/auth";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/server/auth";
 import { ensureCart, mapCartToSummary, refreshCartTotals, type CartWithItems } from "@/server/cart";
 import { estimateShipping } from "@/lib/shipping";
 import { env } from "@/lib/env";
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos invalidos", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   const cart = await ensureCart({
     userId: session?.user?.id,
     sessionToken: req.cookies.get("tn_cart")?.value,

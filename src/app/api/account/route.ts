@@ -7,13 +7,19 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Credentials': 'true',
 };
 
 export async function GET(request: Request) {
+  // Añadir logging para depuración
+  console.log("API Request headers:", Object.fromEntries(request.headers.entries()));
+  
   const session = await getServerSession(authOptions);
+  console.log("Session:", session);
   if (!session?.user?.id) {
+    console.error("API Error: Sesión no encontrada o inválida");
     return new NextResponse(
-      JSON.stringify({ error: "No autorizado" }),
+      JSON.stringify({ error: "No autorizado", details: "Sesión no encontrada o inválida" }),
       { 
         status: 401,
         headers: {

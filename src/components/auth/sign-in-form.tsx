@@ -45,6 +45,7 @@ export function SignInForm({ defaultEmail }: SignInFormProps) {
         email: values.email,
         password: values.password,
         callbackUrl: "/account",
+        redirect: true,
       });
     });
   };
@@ -102,7 +103,7 @@ export function SignInForm({ defaultEmail }: SignInFormProps) {
         type="button"
         variant="outline"
         className="mt-4 w-full rounded-xl border-slate-800 text-slate-200 hover:border-emerald-400/40 hover:text-emerald-200"
-        onClick={() => signIn("google", { callbackUrl: "/account" })}
+        onClick={() => signIn("google", { callbackUrl: "/account", redirect: true })}
       >
         <Mail className="mr-2 h-4 w-4" /> Continuar con Google
       </Button>

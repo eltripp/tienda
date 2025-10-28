@@ -9,8 +9,6 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/account", label: "Resumen", icon: Home },
   { href: "/account/orders", label: "Pedidos", icon: ShoppingBag },
-  { href: "/account/addresses", label: "Direcciones", icon: Map },
-  { href: "/account/payments", label: "Pagos", icon: CreditCard },
 ];
 
 export function AccountNav() {

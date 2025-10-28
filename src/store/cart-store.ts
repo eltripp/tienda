@@ -73,19 +73,39 @@ function mapServerSummary(summary: ServerCartSummary) {
   } satisfies Partial<CartState>;
 }
 
-async function requestCart(endpoint: string, options?: RequestInit) {
-  const response = await fetch(endpoint, {
-    headers: {
-      "Content-Type": "application/json",
-    },
-    credentials: "include",
-    ...options,
-  });
-  if (!response.ok) {
-    throw new Error(`Cart API error ${response.status}`);
-  }
-  const data = (await response.json()) as ServerCartSummary;
-  return data;
+async function requestCart(endpoint: string, options?: RequestInit, retries = 2): Promise<ServerCartSummary> {
+  const makeRequest = async (attempt: number): Promise<ServerCartSummary> => {
+    try {
+      const response = await fetch(endpoint, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        ...options,
+      });
+      
+      if (!response.ok) {
+        const errorMessage = await response.text().catch(() => "Error desconocido");
+        throw new Error(`Cart API error ${response.status}: ${errorMessage}`);
+      }
+      
+      const data = await response.json() as ServerCartSummary;
+      return data;
+    } catch (error) {
+      console.error(`Cart request attempt ${attempt + 1} failed:`, error);
+      
+      if (attempt < retries) {
+        // Esperar un tiempo exponencial antes de reintentar
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return makeRequest(attempt + 1);
+      }
+      
+      throw error;
+    }
+  };
+  
+  return makeRequest(0);
 }
 
 export const useCartStore = create<CartState>()(

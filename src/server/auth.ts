@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+
 // src/server/auth.ts
 import NextAuth from "next-auth";
 import type { NextAuthOptions } from "next-auth";
@@ -27,7 +27,42 @@ const emailConfigured = Boolean(
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "database",
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 días
+    updateAge: 24 * 60 * 60, // 24 horas
+  },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 días
+  },
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60, // 30 días
+      },
+    },
+    callbackUrl: {
+      name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.callback-url" : "next-auth.callback-url",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+    csrfToken: {
+      name: process.env.NODE_ENV === "production" ? "__Host-next-auth.csrf-token" : "next-auth.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
   },
   pages: {
     signIn: "/auth/sign-in",
@@ -90,12 +125,32 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
-        session.user.role = user.role;
+    async jwt({ token, user, account }) {
+      // Persist the OAuth access_token and user id to the token right after signin
+      if (account && user) {
+        token.accessToken = account.access_token;
+        token.id = user.id;
+        token.role = user.role;
       }
+      console.log("JWT callback:", token);
+      return token;
+    },
+    async session({ session, token }) {
+      // Send properties to the client, like an access_token and user id from the token
+      if (session.user && token) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+      }
+      console.log("Session callback:", session);
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      // Si la URL es relativa, prefijarla con el baseUrl
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // Si la URL es relativa al baseUrl actual, permitir
+      else if (new URL(url).origin === baseUrl) return url;
+      // Por defecto, redirigir al dashboard del cliente
+      return baseUrl + "/account";
     },
   },
   events: {

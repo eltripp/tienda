@@ -13,9 +13,7 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
         </p>
       </div>
       <AccountNav />
-      <div className="rounded-3xl border border-slate-900/70 bg-slate-950/60 p-6 sm:p-10">
-        {children}
-      </div>
+      {children}
     </div>
   );
 }
