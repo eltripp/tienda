@@ -44,7 +44,6 @@ export function SignInForm({ defaultEmail }: SignInFormProps) {
       await signIn("credentials", {
         email: values.email,
         password: values.password,
-        callbackUrl: "/account",
         redirect: true,
       });
     });

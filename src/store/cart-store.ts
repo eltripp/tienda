@@ -131,6 +131,62 @@ export const useCartStore = create<CartState>()(
           ...mapServerSummary(summary),
         })),
       addProduct: async (productId, quantity = 1) => {
+        // Verificar si el producto es de localStorage
+        if (productId.startsWith("ls-")) {
+          try {
+            // Obtener el producto completo de localStorage
+            const { getLocalStorageProducts } = await import("@/lib/localStorageProducts");
+            const adminProducts = getLocalStorageProducts();
+            const fullProduct = adminProducts.find(p => p.id === productId);
+            
+            if (fullProduct) {
+              // Obtener el estado actual del carrito
+              const state = get();
+              const existingItem = state.items.find(item => item.productId === productId);
+              
+              // Crear o actualizar el item del carrito
+              const cartItem: CartItem = {
+                id: existingItem?.id || `cart-${productId}-${Date.now()}`,
+                productId: productId,
+                slug: fullProduct.slug,
+                name: fullProduct.name,
+                price: fullProduct.price,
+                image: fullProduct.images?.[0]?.url || "",
+                quantity: existingItem ? existingItem.quantity + quantity : quantity,
+                brand: typeof fullProduct.brand === "string" ? fullProduct.brand : fullProduct.brand?.name,
+                maxQuantity: fullProduct.stock,
+              };
+              
+              // Actualizar el carrito
+              const newItems = existingItem
+                ? state.items.map(item => item.productId === productId ? cartItem : item)
+                : [...state.items, cartItem];
+              
+              // Calcular nuevos totales
+              const subtotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+              const shipping = 0; // Envío gratis para productos de localStorage
+              const discount = 0;
+              const total = subtotal + shipping - discount;
+              
+              // Actualizar el estado
+              set({
+                items: newItems,
+                subtotal,
+                shipping,
+                discount,
+                total,
+                currency: "CLP",
+                drawerOpen: true,
+              });
+              
+              return;
+            }
+          } catch (error) {
+            console.error("Error al agregar producto de localStorage al carrito:", error);
+          }
+        }
+        
+        // Si es un producto de la base de datos, usar el método normal
         const summary = await requestCart("/api/cart", {
           method: "POST",
           body: JSON.stringify({ productId, quantity }),
@@ -139,6 +195,45 @@ export const useCartStore = create<CartState>()(
         set({ drawerOpen: true });
       },
       updateProduct: async (productId, quantity) => {
+        // Verificar si el producto es de localStorage
+        if (productId.startsWith("ls-")) {
+          try {
+            // Obtener el estado actual del carrito
+            const state = get();
+            const existingItem = state.items.find(item => item.productId === productId);
+            
+            if (existingItem) {
+              // Actualizar la cantidad del item
+              const newItems = state.items.map(item => 
+                item.productId === productId 
+                  ? { ...item, quantity }
+                  : item
+              );
+              
+              // Calcular nuevos totales
+              const subtotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+              const shipping = 0; // Envío gratis para productos de localStorage
+              const discount = 0;
+              const total = subtotal + shipping - discount;
+              
+              // Actualizar el estado
+              set({
+                items: newItems,
+                subtotal,
+                shipping,
+                discount,
+                total,
+                currency: "CLP",
+              });
+              
+              return;
+            }
+          } catch (error) {
+            console.error("Error al actualizar producto de localStorage en el carrito:", error);
+          }
+        }
+        
+        // Si es un producto de la base de datos, usar el método normal
         const summary = await requestCart("/api/cart", {
           method: "PATCH",
           body: JSON.stringify({ productId, quantity }),
@@ -146,6 +241,38 @@ export const useCartStore = create<CartState>()(
         get().setFromServer(summary);
       },
       removeProduct: async (productId) => {
+        // Verificar si el producto es de localStorage
+        if (productId.startsWith("ls-")) {
+          try {
+            // Obtener el estado actual del carrito
+            const state = get();
+            
+            // Filtrar los items para eliminar el producto
+            const newItems = state.items.filter(item => item.productId !== productId);
+            
+            // Calcular nuevos totales
+            const subtotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const shipping = 0; // Envío gratis para productos de localStorage
+            const discount = 0;
+            const total = subtotal + shipping - discount;
+            
+            // Actualizar el estado
+            set({
+              items: newItems,
+              subtotal,
+              shipping,
+              discount,
+              total,
+              currency: "CLP",
+            });
+            
+            return;
+          } catch (error) {
+            console.error("Error al eliminar producto de localStorage del carrito:", error);
+          }
+        }
+        
+        // Si es un producto de la base de datos, usar el método normal
         const summary = await requestCart("/api/cart", {
           method: "DELETE",
           body: JSON.stringify({ productId }),

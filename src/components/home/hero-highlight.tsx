@@ -30,7 +30,7 @@ export function HeroHighlight({ product }: HeroHighlightProps) {
           className="relative z-10 space-y-6"
         >
           <Badge className="rounded-full border border-emerald-500/40 bg-transparent px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
-            Nuevo lanzamiento
+            {product.featured ? "Producto destacado" : "Nuevo lanzamiento"}
           </Badge>
           <h1 className="font-heading text-4xl leading-tight text-slate-50 sm:text-5xl lg:text-6xl">
             {product.name}

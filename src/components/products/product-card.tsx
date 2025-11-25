@@ -22,6 +22,43 @@ export function ProductCard({ product, className }: ProductCardProps) {
 
   const handleAddToCart = async () => {
     try {
+      // Verificar si el producto es de localStorage
+      if (product.id.startsWith("ls-")) {
+        // Obtener el producto completo de localStorage
+        const { getLocalStorageProducts } = await import("@/lib/localStorageProducts");
+        const adminProducts = getLocalStorageProducts();
+        const fullProduct = adminProducts.find(p => p.id === product.id);
+        
+        if (fullProduct) {
+          // Agregar el producto de localStorage al carrito
+          const cartProduct = {
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            image: primaryImage?.url || "",
+            quantity: 1,
+            slug: product.slug,
+          };
+          
+          // Guardar en el carrito de localStorage
+          const cartItems = JSON.parse(localStorage.getItem("cart") || "[]");
+          const existingItemIndex = cartItems.findIndex((item: any) => item.id === product.id);
+          
+          if (existingItemIndex >= 0) {
+            cartItems[existingItemIndex].quantity += 1;
+          } else {
+            cartItems.push(cartProduct);
+          }
+          
+          localStorage.setItem("cart", JSON.stringify(cartItems));
+          
+          // Actualizar el estado del carrito
+          useCartStore.setState({ items: cartItems });
+          return;
+        }
+      }
+      
+      // Si es un producto de la base de datos, usar el método normal
       await addProduct(product.id, 1);
     } catch (error) {
       console.error("No se pudo agregar el producto al carrito", error);
@@ -94,11 +131,11 @@ export function ProductCard({ product, className }: ProductCardProps) {
         <div className="space-y-3">
           <div className="flex items-end gap-2 text-slate-100">
             <span className="text-2xl font-semibold text-emerald-400">
-              {formatCurrency(product.price)}
+              {formatCurrency(product.price, "CLP")}
             </span>
             {product.compareAtPrice && (
               <span className="text-sm text-slate-500 line-through">
-                {formatCurrency(product.compareAtPrice)}
+                {formatCurrency(product.compareAtPrice, "CLP")}
               </span>
             )}
           </div>

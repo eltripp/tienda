@@ -36,10 +36,25 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(signInUrl);
     }
   }
+  
+  // Proteger rutas del administrador
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    // Excluir rutas públicas del administrador
+    const publicAdminRoutes = ["/admin/login", "/admin/set-admin", "/admin/convert-to-admin", "/admin/delete-user", "/admin/create-admin"];
+    const isPublicAdminRoute = publicAdminRoutes.some(route => 
+      request.nextUrl.pathname === route
+    );
+    
+    if (!isPublicAdminRoute && (!token || token.role !== "ADMIN")) {
+      console.log("Middleware: Redirigiendo a login de admin");
+      const signInUrl = new URL("/admin/login", request.url);
+      return NextResponse.redirect(signInUrl);
+    }
+  }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/account/:path*", "/api/account/:path*"],
+  matcher: ["/account/:path*", "/api/account/:path*", "/admin/:path*", "/api/admin/:path*"],
 };

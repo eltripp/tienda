@@ -152,7 +152,22 @@ const fallbackProducts: ProductSummary[] = seedProducts.map((product, index) => 
 // ✅ Productos destacados
 export const getFeaturedProducts = cache(async (): Promise<ProductSummary[]> => {
   try {
-    const products = await prisma.product.findMany({
+    // Obtener productos destacados de localStorage
+    let localStorageFeaturedProducts = [];
+    try {
+      const { getLocalStorageProducts, mapAdminProductToCatalog } = await import("@/lib/localStorageProducts");
+      const adminProducts = getLocalStorageProducts();
+      localStorageFeaturedProducts = adminProducts
+        .filter(product => product.featured && product.isActive !== false)
+        .map(product => mapAdminProductToCatalog(product))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 12);
+    } catch (error) {
+      console.error("Error al obtener productos destacados de localStorage:", error);
+    }
+
+    // Obtener productos destacados de la base de datos
+    const dbProducts = await prisma.product.findMany({
       where: { featured: true, isActive: true },
       include: {
         brand: true,
@@ -160,11 +175,17 @@ export const getFeaturedProducts = cache(async (): Promise<ProductSummary[]> => 
         categories: { include: { category: true } },
       },
       orderBy: { createdAt: "desc" },
-      take: 12,
+      take: Math.max(0, 12 - localStorageFeaturedProducts.length),
     });
 
-    if (!products.length) return fallbackProducts.slice(0, 8);
-    return products.map(mapProductToSummary);
+    // Combinar productos de localStorage y base de datos
+    const allFeaturedProducts = [
+      ...localStorageFeaturedProducts,
+      ...dbProducts.map(mapProductToSummary)
+    ];
+
+    if (!allFeaturedProducts.length) return fallbackProducts.slice(0, 8);
+    return allFeaturedProducts;
   } catch (error) {
     console.error("Error fetching featured products:", error);
     return fallbackProducts.slice(0, 8);
@@ -174,6 +195,40 @@ export const getFeaturedProducts = cache(async (): Promise<ProductSummary[]> => 
 // ✅ Producto destacado del hero
 export const getHeroHighlight = cache(async (): Promise<ProductSummary> => {
   try {
+    // Primero buscar en localStorage
+    try {
+      const { getLocalStorageProducts, mapAdminProductToCatalog } = await import("@/lib/localStorageProducts");
+      const adminProducts = getLocalStorageProducts();
+      
+      // Filtrar productos destacados y activos
+      const featuredProducts = adminProducts.filter(product => 
+        product.featured && product.isActive !== false
+      );
+      
+      if (featuredProducts.length > 0) {
+        // Ordenar por fecha de creación y rating
+        const sortedProducts = featuredProducts.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime();
+          const dateB = new Date(b.createdAt || 0).getTime();
+          
+          if (dateA !== dateB) {
+            return dateB - dateA; // Más reciente primero
+          }
+          
+          // Si las fechas son iguales, ordenar por rating
+          const ratingA = a.rating || 0;
+          const ratingB = b.rating || 0;
+          return ratingB - ratingA;
+        });
+        
+        // Devolver el producto más destacado
+        return mapAdminProductToCatalog(sortedProducts[0]);
+      }
+    } catch (error) {
+      console.error("Error al buscar producto destacado en localStorage:", error);
+    }
+    
+    // Si no hay productos destacados en localStorage, buscar en la base de datos
     const product = await prisma.product.findFirst({
       where: { featured: true, isActive: true },
       orderBy: [{ createdAt: "desc" }, { rating: "desc" }],
@@ -195,7 +250,46 @@ export const getHeroHighlight = cache(async (): Promise<ProductSummary> => {
 // ✅ Categorías destacadas con productos
 export const getCategoriesShowcase = cache(async () => {
   try {
-    const categories = await prisma.category.findMany({
+    // Obtener categorías de productos de localStorage
+    let localStorageCategories = new Map();
+    try {
+      const { getLocalStorageProducts } = await import("@/lib/localStorageProducts");
+      const adminProducts = getLocalStorageProducts();
+      
+      // Extraer categorías de productos de localStorage
+      adminProducts.forEach(product => {
+        if (product.categories && Array.isArray(product.categories) && product.isActive !== false) {
+          product.categories.forEach(category => {
+            const key = typeof category === "string" ? category : category.slug || category.name;
+            if (!localStorageCategories.has(key)) {
+              localStorageCategories.set(key, {
+                id: `ls-${key}`,
+                name: typeof category === "string" ? category : category.name,
+                slug: typeof category === "string" ? category.toLowerCase().replace(/[^a-z0-9]+/g, "-") : category.slug,
+                description: typeof category === "string" ? "" : (category.description || ""),
+                imageUrl: typeof category === "string" ? "" : (category.imageUrl || ""),
+                products: [],
+              });
+            }
+            
+            // Agregar un producto de ejemplo a la categoría
+            const categoryData = localStorageCategories.get(key);
+            if (categoryData.products.length === 0 && product.images && product.images.length > 0) {
+              categoryData.products.push({
+                product: {
+                  images: product.images,
+                },
+              });
+            }
+          });
+        }
+      });
+    } catch (error) {
+      console.error("Error al obtener categorías de localStorage:", error);
+    }
+    
+    // Obtener categorías de la base de datos
+    const dbCategories = await prisma.category.findMany({
       include: {
         products: {
           take: 1,
@@ -209,7 +303,13 @@ export const getCategoriesShowcase = cache(async () => {
       orderBy: { name: "asc" },
     });
 
-    if (!categories.length) {
+    // Combinar categorías de localStorage y base de datos
+    const allCategories = [
+      ...dbCategories,
+      ...Array.from(localStorageCategories.values())
+    ];
+
+    if (!allCategories.length) {
       return seedCategories.map((category, index) => ({
         id: `seed-category-${index}`,
         name: category.name,
@@ -254,6 +354,28 @@ export const getCategoriesShowcase = cache(async () => {
 // ✅ Producto por slug
 export async function getProductBySlug(slug: string) {
   try {
+    // Primero buscar en localStorage
+    try {
+      const { getLocalStorageProducts, mapAdminProductToCatalog } = await import("@/lib/localStorageProducts");
+      const adminProducts = getLocalStorageProducts();
+      
+      // Normalizar el slug para la comparación
+      const normalizedSlug = slug.trim().toLowerCase();
+      
+      const localStorageProduct = adminProducts.find(product => {
+        const normalizedProductSlug = product.slug ? product.slug.trim().toLowerCase() : "";
+        return normalizedProductSlug === normalizedSlug;
+      });
+      
+      if (localStorageProduct) {
+        console.log("Producto encontrado en localStorage:", localStorageProduct.name);
+        return mapAdminProductToCatalog(localStorageProduct);
+      }
+    } catch (error) {
+      console.error("Error al buscar producto en localStorage:", error);
+    }
+    
+    // Si no se encuentra en localStorage, buscar en la base de datos
     const product = await prisma.product.findUnique({
       where: { slug },
       include: {

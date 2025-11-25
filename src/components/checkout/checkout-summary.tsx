@@ -39,7 +39,14 @@ export function CheckoutSummary() {
         </div>
         <div className="flex items-center justify-between text-slate-400">
           <span>Envio estimado</span>
-          <span>{shipping > 0 ? formatCurrency(shipping, currency) : "Se calcula al confirmar"}</span>
+          <span>
+            {shipping > 0 
+              ? formatCurrency(shipping, currency) 
+              : items.some(item => item.productId.startsWith("ls-")) 
+                ? "Gratis" 
+                : "Se calcula al confirmar"
+            }
+          </span>
         </div>
         <div className="flex items-center justify-between text-emerald-300">
           <span>Descuento</span>

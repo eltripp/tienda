@@ -227,8 +227,8 @@ function calculateCartTotals(cart: CartWithItems) {
     return total + Number(item.unitPrice) * item.quantity;
   }, 0);
 
-  const shipping = Number(cart.shippingTotal ?? 0);
-  const discount = Number(cart.discountTotal ?? 0);
+  const shipping = Number(cart.shippingTotal) || 0;
+  const discount = Number(cart.discountTotal) || 0;
   const total = subtotal + shipping - discount;
 
   return { subtotal, shipping, discount, total };

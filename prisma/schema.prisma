@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -56,12 +56,12 @@ model Account {
   type               String
   provider           String
   providerAccountId  String
-  refresh_token      String? @db.Text
-  access_token       String? @db.Text
+  refresh_token      String?
+  access_token       String?
   expires_at         Int?
   token_type         String?
   scope              String?
-  id_token           String? @db.Text
+  id_token           String?
   session_state      String?
   oauth_token_secret String?
   oauth_token        String?
@@ -114,8 +114,8 @@ model ShippingRegion {
   id               String     @id @default(cuid())
   name             String
   code             String     @unique
-  baseCost         Decimal    @db.Decimal(10, 2)
-  perKgCost        Decimal    @db.Decimal(10, 2) @default(0)
+  baseCost         Float
+  perKgCost        Float @default(0)
   estimatedMinDays Int        @default(2)
   estimatedMaxDays Int        @default(5)
   communes         Commune[]
@@ -130,7 +130,7 @@ model Commune {
   name      String
   code      String   @unique
   regionId  String
-  extraCost Decimal? @db.Decimal(10, 2)
+  extraCost Float?
   region    ShippingRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
   addresses Address[]
 }
@@ -163,15 +163,15 @@ model Product {
   slug            String                  @unique
   description     String
   highlights      String?
-  price           Decimal                 @db.Decimal(10, 2)
-  compareAtPrice  Decimal?                @db.Decimal(10, 2)
+  price           Float
+  compareAtPrice  Float?
   stock           Int
   sku             String                  @unique
-  weight          Decimal?                @db.Decimal(10, 2)
+  weight          Float?
   featured        Boolean                 @default(false)
   isActive        Boolean                 @default(true)
-  tags            String[]
-  rating          Decimal?                @db.Decimal(3, 2)
+  tags            String
+  rating          Float?
   reviewCount     Int                     @default(0)
   brandId         String?
   createdAt       DateTime                @default(now())
@@ -218,11 +218,11 @@ model Cart {
   id             String     @id @default(cuid())
   userId         String?    @unique
   sessionToken   String?    @unique
-  currency       String     @default("USD")
-  subtotal       Decimal    @db.Decimal(10, 2) @default(0)
-  shippingTotal  Decimal    @db.Decimal(10, 2) @default(0)
-  discountTotal  Decimal    @db.Decimal(10, 2) @default(0)
-  total          Decimal    @db.Decimal(10, 2) @default(0)
+  currency       String     @default("CLP")
+  subtotal       Float @default(0)
+  shippingTotal  Float @default(0)
+  discountTotal  Float @default(0)
+  total          Float @default(0)
   status         String     @default("ACTIVE")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
@@ -235,7 +235,7 @@ model CartItem {
   cartId     String
   productId  String
   quantity   Int      @default(1)
-  unitPrice  Decimal  @db.Decimal(10, 2)
+  unitPrice  Float
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
@@ -249,11 +249,11 @@ model Order {
   orderNumber       Int            @unique
   status            OrderStatus    @default(PENDING)
   paymentStatus     PaymentStatus  @default(PENDING)
-  subtotal          Decimal        @db.Decimal(10, 2)
-  shippingTotal     Decimal        @db.Decimal(10, 2)
-  discountTotal     Decimal        @db.Decimal(10, 2) @default(0)
-  taxTotal          Decimal        @db.Decimal(10, 2) @default(0)
-  total             Decimal        @db.Decimal(10, 2)
+  subtotal          Float
+  shippingTotal     Float
+  discountTotal     Float @default(0)
+  taxTotal          Float @default(0)
+  total             Float
   notes             String?
   paymentIntentId   String?
   stripeCustomerId  String?
@@ -275,7 +275,7 @@ model OrderItem {
   orderId    String
   productId  String
   quantity   Int
-  unitPrice  Decimal  @db.Decimal(10, 2)
+  unitPrice  Float
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product    Product  @relation(fields: [productId], references: [id])
 }
@@ -300,14 +300,13 @@ model Discount {
   name          String
   description   String?
   percentage    Int?
-  amount        Decimal?       @db.Decimal(10, 2)
-  minOrderTotal Decimal?       @db.Decimal(10, 2)
-  isAutomatic   Boolean        @default(false)
-  active        Boolean        @default(true)
-  maxUses       Int?
-  uses          Int            @default(0)
-  startsAt      DateTime?
-  endsAt        DateTime?
+  amount        Float?
+  minOrderTotal Float?
+  isActive      Boolean        @default(true)
+  usageLimit    Int?
+  usedCount     Int            @default(0)
+  startsAt      DateTime       @default(now())
+  expiresAt     DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   users         UserDiscount[]
@@ -317,7 +316,7 @@ model UserDiscount {
   id         String   @id @default(cuid())
   userId     String
   discountId String
-  appliedAt  DateTime @default(now())
+  usedAt     DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
 

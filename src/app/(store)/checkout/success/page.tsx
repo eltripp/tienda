@@ -1,8 +1,13 @@
 ﻿import Link from "next/link";
 import { CheckCircle2, Sparkles } from "lucide-react";
+import { useCartStore } from "@/store/cart-store";
 
 export default function CheckoutSuccessPage({ searchParams }: { searchParams: { order?: string } }) {
   const orderId = searchParams.order ?? "";
+  
+  // Limpiar el carrito después de una compra exitosa
+  const clearCart = useCartStore((state) => state.clear);
+  clearCart();
 
   return (
     <main className="mx-auto flex min-h-[60vh] w-full max-w-3xl flex-col items-center justify-center gap-6 px-6 py-16 text-center">

@@ -1,12 +1,17 @@
 ﻿"use client";
 
 import Image from "next/image";
-import { Bell, Search } from "lucide-react";
+import { Bell, Search, LogOut } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import Link from "next/link";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export function AdminTopbar() {
+  const { data: session } = useSession();
+  const userName = session?.user?.name || "Admin";
+  const userEmail = session?.user?.email || "admin@technova.cl";
   return (
     <header className="flex items-center justify-between border-b border-slate-900/80 bg-slate-950/80 px-6 py-4">
       <div className="relative hidden max-w-sm flex-1 items-center gap-3 rounded-xl border border-slate-900 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 sm:flex">
@@ -26,8 +31,8 @@ export function AdminTopbar() {
         </Button>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-sm font-semibold text-slate-100">Sara Méndez</p>
-            <p className="text-xs text-slate-500">Administradora</p>
+            <p className="text-sm font-semibold text-slate-100">{userName}</p>
+            <p className="text-xs text-slate-500">{userEmail}</p>
           </div>
           <div className="relative h-10 w-10 overflow-hidden rounded-full border border-emerald-500/30">
             <Image
@@ -37,6 +42,15 @@ export function AdminTopbar() {
               className="object-cover"
             />
           </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="rounded-full border border-slate-900/70 bg-slate-900/60 text-slate-200 hover:border-red-400/40 hover:text-red-200"
+            onClick={() => signOut({ callbackUrl: "/" })}
+            title="Cerrar sesión"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </header>

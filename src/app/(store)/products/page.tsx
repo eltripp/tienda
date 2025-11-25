@@ -33,11 +33,13 @@ function mapSearchParams(searchParams: Record<string, string | string[] | undefi
 }
 
 type ProductsPageProps = {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
-  const query = mapSearchParams(searchParams);
+  // Esperar a que se resuelvan los searchParams
+  const resolvedSearchParams = await searchParams;
+  const query = mapSearchParams(resolvedSearchParams);
 
   const [filters, catalog] = await Promise.all([
     fetchCatalogFilters(),

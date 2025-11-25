@@ -1,7 +1,5 @@
-﻿"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import {
   BarChart3,
   Boxes,
@@ -22,8 +20,14 @@ const links = [
   { label: "Analytics", icon: BarChart3, href: "/admin/analytics" },
 ];
 
-export function AdminSidebar() {
-  const pathname = usePathname();
+export async function AdminSidebar() {
+  // Obtener datos de la base de datos
+  const [totalOrders, totalProducts] = await Promise.all([
+    prisma.order.count(),
+    prisma.product.count({
+      where: { isActive: true }
+    })
+  ]);
 
   return (
     <aside className="hidden w-72 flex-shrink-0 border-r border-slate-900/80 bg-slate-950/80 p-6 lg:flex lg:flex-col">
@@ -38,7 +42,9 @@ export function AdminSidebar() {
       </div>
       <nav className="mt-10 flex-1 space-y-2">
         {links.map((link) => {
-          const active = pathname === link.href;
+          // En un componente de servidor no podemos usar usePathname
+          // Por ahora, todos los enlaces se mostrarán como inactivos
+          const active = false;
           return (
             <Link
               key={link.href}
@@ -56,7 +62,7 @@ export function AdminSidebar() {
       </nav>
       <div className="space-y-2 rounded-2xl border border-slate-900/70 bg-slate-900/60 p-4 text-xs text-slate-400">
         <p className="font-semibold text-slate-200">Resumen semanal</p>
-        <p>12 pedidos pendientes • 4 tickets críticos</p>
+        <p>{totalOrders} pedidos totales • {totalProducts} productos activos</p>
         <Link
           href="/admin/settings"
           className="inline-flex items-center gap-2 text-emerald-300 transition hover:text-emerald-200"

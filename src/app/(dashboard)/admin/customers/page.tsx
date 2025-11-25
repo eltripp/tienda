@@ -1,14 +1,33 @@
 ﻿import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
 
-const customers = [
-  { name: "Danilo Andrade", email: "danilo@technova.dev", lifetimeValue: 4689000, orders: 12 },
-  { name: "Sofía Contreras", email: "sofia@innovacorp.cl", lifetimeValue: 2845000, orders: 8 },
-  { name: "Kibernum", email: "compras@kibernum.com", lifetimeValue: 18999000, orders: 32 },
-];
+export default async function AdminCustomersPage() {
+  // Obtener clientes reales de la base de datos
+  const customers = await prisma.user.findMany({
+    where: { role: "CUSTOMER" },
+    include: {
+      _count: {
+        select: { orders: true }
+      },
+      orders: {
+        select: {
+          total: true
+        }
+      }
+    }
+  });
 
-export default function AdminCustomersPage() {
+  // Calcular el valor de vida útil de cada cliente
+  const customersWithLifetimeValue = customers.map(customer => ({
+    ...customer,
+    lifetimeValue: customer.orders.reduce((sum, order) => sum + Number(order.total || 0), 0)
+  }));
+
+  // Ordenar clientes por valor de vida útil (mayor a menor)
+  customersWithLifetimeValue.sort((a, b) => b.lifetimeValue - a.lifetimeValue);
+
   return (
     <div className="space-y-6">
       <div>
@@ -17,16 +36,16 @@ export default function AdminCustomersPage() {
         <p className="text-sm text-slate-400">Identifica clientes frecuentes y oportunidades de fidelización.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {customers.map((customer) => (
-          <Card key={customer.email} className="border-slate-900/70 bg-slate-950/60">
+        {customersWithLifetimeValue.map((customer) => (
+          <Card key={customer.id} className="border-slate-900/70 bg-slate-950/60">
             <CardHeader className="flex items-center gap-4">
               <Avatar className="h-12 w-12">
-                <AvatarImage src={`https://avatar.vercel.sh/${encodeURIComponent(customer.email)}`} />
-                <AvatarFallback>{customer.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                <AvatarImage src={`https://avatar.vercel.sh/${encodeURIComponent(customer.email || "")}`} />
+                <AvatarFallback>{(customer.name || customer.email || "NN").slice(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
               <div>
-                <CardTitle className="text-lg text-slate-100">{customer.name}</CardTitle>
-                <p className="text-xs text-slate-500">{customer.email}</p>
+                <CardTitle className="text-lg text-slate-100">{customer.name || "Sin nombre"}</CardTitle>
+                <p className="text-xs text-slate-500">{customer.email || "Sin email"}</p>
               </div>
             </CardHeader>
             <CardContent className="flex items-center justify-between text-sm text-slate-300">
@@ -36,7 +55,7 @@ export default function AdminCustomersPage() {
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Pedidos</p>
-                <p className="text-base font-semibold text-slate-100">{customer.orders}</p>
+                <p className="text-base font-semibold text-slate-100">{customer._count.orders}</p>
               </div>
             </CardContent>
           </Card>

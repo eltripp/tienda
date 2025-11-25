@@ -7,7 +7,7 @@ import EmailProvider from "next-auth/providers/email";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { z } from "zod";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
@@ -144,11 +144,13 @@ export const authOptions: NextAuthOptions = {
       console.log("Session callback:", session);
       return session;
     },
-    async redirect({ url, baseUrl }) {
+    async redirect({ url, baseUrl, token }) {
       // Si la URL es relativa, prefijarla con el baseUrl
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       // Si la URL es relativa al baseUrl actual, permitir
       else if (new URL(url).origin === baseUrl) return url;
+      // Si es un administrador, redirigir al dashboard de administrador
+      if (token?.role === "ADMIN") return baseUrl + "/admin";
       // Por defecto, redirigir al dashboard del cliente
       return baseUrl + "/account";
     },
@@ -176,6 +178,12 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-// 👇 Este handler se usa por NextAuth en las rutas de API
+// Exportar handlers para compatibilidad con Next.js 15
+export const { handlers, auth, signIn, signOut } = NextAuth(authOptions);
+
+// 👇 Este handler se usa por NextAuth en las rutas de API (mantener para compatibilidad)
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
+export { handler };
+
+export const runtime = "nodejs";

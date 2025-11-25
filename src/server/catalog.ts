@@ -62,6 +62,78 @@ export async function fetchCatalogProducts(query: CatalogQuery) {
   const perPage = Math.min(24, query.perPage ?? DEFAULT_PAGE_SIZE);
   const skip = (page - 1) * perPage;
 
+  // Obtener productos de localStorage
+  let localStorageProducts = [];
+  try {
+    // Si estamos en el servidor, no podemos acceder a localStorage directamente
+    if (typeof window === "undefined") {
+      // En el servidor, intentamos obtener los productos de la base de datos
+      const dbProducts = await prisma.product.findMany({
+        where: { isActive: true },
+        include: {
+          brand: true,
+          images: {
+            orderBy: {
+              order: "asc",
+            },
+          },
+          categories: {
+            include: {
+              category: true,
+            },
+          },
+        },
+      });
+      
+      localStorageProducts = dbProducts.map(product => ({
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        description: product.description,
+        price: product.price,
+        compareAtPrice: product.compareAtPrice,
+        sku: product.sku,
+        stock: product.stock,
+        weight: product.weight,
+        featured: product.featured,
+        isActive: product.isActive,
+        tags: product.tags ? product.tags.split(",") : [],
+        highlights: product.highlights || [],
+        images: product.images.map((img, index) => ({
+          id: img.id,
+          url: img.url,
+          alt: img.alt || product.name,
+          order: img.order,
+          isPrimary: img.isPrimary || index === 0,
+        })),
+        brand: product.brand ? {
+          id: product.brand.id,
+          name: product.brand.name,
+          slug: product.brand.slug,
+        } : null,
+        categories: product.categories.map(cat => ({
+          id: cat.category.id,
+          name: cat.category.name,
+          slug: cat.category.slug,
+        })),
+        specifications: [],
+        rating: 0,
+        reviewCount: 0,
+        createdAt: product.createdAt.toISOString(),
+        updatedAt: product.updatedAt.toISOString(),
+      }));
+    } else {
+      // En el cliente, podemos acceder a localStorage
+      const { getLocalStorageProducts, mapAdminProductToCatalog } = await import("@/lib/localStorageProducts");
+      const adminProducts = getLocalStorageProducts();
+      localStorageProducts = adminProducts
+        .filter(product => product.isActive !== false) // Solo productos activos
+        .map(product => mapAdminProductToCatalog(product));
+    }
+  } catch (error) {
+    console.error("Error al cargar productos:", error);
+  }
+
   const where: Prisma.ProductWhereInput = {
     isActive: true,
     ...(query.search
@@ -109,7 +181,75 @@ export async function fetchCatalogProducts(query: CatalogQuery) {
   };
 
   try {
-    const [products, total] = await prisma.$transaction([
+    // Filtrar productos de localStorage según los criterios de búsqueda
+    let filteredLocalStorageProducts = localStorageProducts;
+    
+    if (query.search) {
+      const searchLower = query.search.toLowerCase();
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.name.toLowerCase().includes(searchLower) ||
+        product.description.toLowerCase().includes(searchLower) ||
+        product.tags.some(tag => tag.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    if (query.category) {
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.categories.some(cat => cat.slug === query.category)
+      );
+    }
+    
+    if (query.brand) {
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.brand?.slug === query.brand
+      );
+    }
+    
+    if (query.minPrice !== undefined) {
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.price >= query.minPrice!
+      );
+    }
+    
+    if (query.maxPrice !== undefined) {
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.price <= query.maxPrice!
+      );
+    }
+    
+    if (query.availability === "in-stock") {
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.stock > 0
+      );
+    } else if (query.availability === "out-of-stock") {
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.stock === 0
+      );
+    } else if (query.availability === "preorder") {
+      filteredLocalStorageProducts = filteredLocalStorageProducts.filter(product => 
+        product.stock <= 0 && product.isActive
+      );
+    }
+    
+    // Ordenar productos de localStorage
+    if (query.sort === "price-asc") {
+      filteredLocalStorageProducts.sort((a, b) => a.price - b.price);
+    } else if (query.sort === "price-desc") {
+      filteredLocalStorageProducts.sort((a, b) => b.price - a.price);
+    } else if (query.sort === "rating") {
+      filteredLocalStorageProducts.sort((a, b) => b.rating - a.rating);
+    } else { // newest (por defecto)
+      filteredLocalStorageProducts.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+    
+    // Paginar productos de localStorage
+    const totalLocalStorage = filteredLocalStorageProducts.length;
+    const paginatedLocalStorageProducts = filteredLocalStorageProducts.slice(skip, skip + perPage);
+    
+    // Obtener productos de la base de datos
+    const [dbProducts, dbTotal] = await prisma.$transaction([
       prisma.product.findMany({
         where,
         include: {
@@ -126,14 +266,24 @@ export async function fetchCatalogProducts(query: CatalogQuery) {
           },
         },
         orderBy: buildSortOrder(query.sort),
-        skip,
-        take: perPage,
+        skip: Math.max(0, skip - totalLocalStorage), // Ajustar skip para evitar duplicados
+        take: Math.max(0, perPage - paginatedLocalStorageProducts.length), // Ajustar take para completar la página
       }),
       prisma.product.count({ where }),
     ]);
 
+    // Combinar productos de localStorage y base de datos
+    // Priorizar productos de localStorage si hay alguno
+    const allProducts = paginatedLocalStorageProducts.length > 0 
+      ? paginatedLocalStorageProducts 
+      : dbProducts.slice(0, perPage);
+    
+    const total = paginatedLocalStorageProducts.length > 0 
+      ? totalLocalStorage 
+      : dbTotal;
+
     return {
-      products: products.map(mapProductToSummary),
+      products: allProducts,
       total,
       page,
       perPage,
@@ -236,53 +386,74 @@ export async function fetchCatalogProducts(query: CatalogQuery) {
 
 export async function fetchCatalogFilters(): Promise<CatalogFilters> {
   try {
-    const [categories, brands, priceStats] = await Promise.all([
-      prisma.category.findMany({
-        include: {
-          _count: {
-            select: {
-              products: true,
-            },
-          },
-        },
-        orderBy: {
-          name: "asc",
-        },
-      }),
-      prisma.brand.findMany({
-        include: {
-          _count: {
-            select: {
-              products: true,
-            },
-          },
-        },
-        orderBy: {
-          name: "asc",
-        },
-      }),
-      prisma.product.aggregate({
-        _min: { price: true },
-        _max: { price: true },
-      }),
-    ]);
+    // Obtener productos de localStorage
+    let localStorageProducts = [];
+    try {
+      const { getLocalStorageProducts } = await import("@/lib/localStorageProducts");
+      localStorageProducts = getLocalStorageProducts();
+    } catch (error) {
+      console.error("Error al cargar productos de localStorage:", error);
+    }
+
+    // Extraer categorías y marcas de productos de localStorage
+    const localStorageCategories = new Map();
+    const localStorageBrands = new Map();
+    const localStoragePrices: number[] = [];
+
+    localStorageProducts.forEach(product => {
+      // Procesar categorías
+      if (product.categories && Array.isArray(product.categories)) {
+        product.categories.forEach(category => {
+          const key = typeof category === "string" ? category : category.slug || category.name;
+          if (!localStorageCategories.has(key)) {
+            localStorageCategories.set(key, {
+              id: `ls-${key}`,
+              name: typeof category === "string" ? category : category.name,
+              slug: typeof category === "string" ? category.toLowerCase().replace(/[^a-z0-9]+/g, "-") : category.slug,
+              productCount: 0,
+            });
+          }
+          localStorageCategories.get(key).productCount++;
+        });
+      }
+
+      // Procesar marcas
+      if (product.brand) {
+        const brandKey = typeof product.brand === "string" ? product.brand : product.brand.slug || product.brand.name;
+        if (!localStorageBrands.has(brandKey)) {
+          localStorageBrands.set(brandKey, {
+            id: `ls-${brandKey}`,
+            name: typeof product.brand === "string" ? product.brand : product.brand.name,
+            slug: typeof product.brand === "string" ? product.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-") : product.brand.slug,
+            productCount: 0,
+          });
+        }
+        localStorageBrands.get(brandKey).productCount++;
+      }
+
+      // Procesar precios
+      if (typeof product.price === "number") {
+        localStoragePrices.push(product.price);
+      }
+    });
+
+    // No obtener categorías, marcas y precios de la base de datos
+    const categories = [];
+    const brands = [];
+    const priceStats = { _min: { price: 0 }, _max: { price: 0 } };
+
+    // Solo usar categorías, marcas y precios de localStorage
+    const allCategories = Array.from(localStorageCategories.values());
+    const allBrands = Array.from(localStorageBrands.values());
+    const lsMinPrice = localStoragePrices.length > 0 ? Math.min(...localStoragePrices) : 0;
+    const lsMaxPrice = localStoragePrices.length > 0 ? Math.max(...localStoragePrices) : 0;
 
     return {
-      categories: categories.map((category) => ({
-        id: category.id,
-        name: category.name,
-        slug: category.slug,
-        productCount: category._count.products,
-      })),
-      brands: brands.map((brand) => ({
-        id: brand.id,
-        name: brand.name,
-        slug: brand.slug,
-        productCount: brand._count.products,
-      })),
+      categories: allCategories,
+      brands: allBrands,
       priceRange: {
-        min: priceStats._min.price ? Number(priceStats._min.price) : 0,
-        max: priceStats._max.price ? Number(priceStats._max.price) : 0,
+        min: lsMinPrice,
+        max: lsMaxPrice,
       },
       availability: [
         { label: "Disponible", value: "in-stock" },

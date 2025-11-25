@@ -6,8 +6,9 @@ import { getProductBySlug } from "@/server/products";
 import { ProductDetailActions } from "@/components/products/product-detail-actions";
 import { formatCurrency } from "@/lib/utils";
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const product = await getProductBySlug(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
   if (!product) {
     return {
       title: "Producto no encontrado | Tech Nova",
@@ -19,8 +20,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function ProductDetailPage({ params }: { params: { slug: string } }) {
-  const product = await getProductBySlug(params.slug);
+export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
   if (!product) {
     notFound();
   }
@@ -61,9 +63,9 @@ export default async function ProductDetailPage({ params }: { params: { slug: st
           <div className="space-y-2 rounded-2xl border border-slate-900/60 bg-slate-950/70 p-4">
             <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Precio</p>
             <div className="flex items-end gap-2">
-              <span className="text-3xl font-semibold text-emerald-400">{formatCurrency(product.price)}</span>
+              <span className="text-3xl font-semibold text-emerald-400">{formatCurrency(product.price, "CLP")}</span>
               {product.compareAtPrice && (
-                <span className="text-sm text-slate-500 line-through">{formatCurrency(product.compareAtPrice)}</span>
+                <span className="text-sm text-slate-500 line-through">{formatCurrency(product.compareAtPrice, "CLP")}</span>
               )}
             </div>
             {product.highlights && <p className="text-sm text-slate-300">{product.highlights}</p>}

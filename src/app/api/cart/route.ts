@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 
-import { getServerSession } from "next-auth/next"; // ✅ para NextAuth v4
-import { authOptions } from "@/server/auth"; // ✅ importas la configuración
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/server/auth";
 
 import type { CartWithItems } from "@/server/cart";
 import {

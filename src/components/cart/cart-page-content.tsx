@@ -18,6 +18,7 @@ export function CartPageContent() {
   const total = useCartStore((state) => state.total);
   const currency = useCartStore((state) => state.currency);
   const removeProduct = useCartStore((state) => state.removeProduct);
+  const updateProduct = useCartStore((state) => state.updateProduct);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-10 px-6 py-16 sm:px-10">
@@ -72,7 +73,35 @@ export function CartPageContent() {
                     <p className="mt-2 text-sm text-slate-400">{formatCurrency(item.price, currency)}</p>
                   </div>
                   <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>Cantidad: {item.quantity}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="h-6 w-6 rounded-full border border-slate-800 bg-slate-900 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+                        onClick={() => {
+                          if (item.quantity > 1) {
+                            updateProduct(item.productId, item.quantity - 1);
+                          }
+                        }}
+                        disabled={item.quantity <= 1}
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center">{item.quantity}</span>
+                      <button
+                        type="button"
+                        className="h-6 w-6 rounded-full border border-slate-800 bg-slate-900 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+                        onClick={() => {
+                          if (item.maxQuantity && item.quantity < item.maxQuantity) {
+                            updateProduct(item.productId, item.quantity + 1);
+                          } else if (!item.maxQuantity) {
+                            updateProduct(item.productId, item.quantity + 1);
+                          }
+                        }}
+                        disabled={item.maxQuantity ? item.quantity >= item.maxQuantity : false}
+                      >
+                        +
+                      </button>
+                    </div>
                     <button
                       type="button"
                       className="rounded-full px-2 py-1 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-rose-400"
@@ -94,7 +123,14 @@ export function CartPageContent() {
               </div>
               <div className="flex items-center justify-between text-slate-400">
                 <span>Envio estimado</span>
-                <span>{shipping > 0 ? formatCurrency(shipping, currency) : "Por calcular"}</span>
+                <span>
+                  {shipping > 0 
+                    ? formatCurrency(shipping, currency) 
+                    : items.some(item => item.productId.startsWith("ls-")) 
+                      ? "Gratis" 
+                      : "Por calcular"
+                  }
+                </span>
               </div>
               <div className="flex items-center justify-between text-emerald-300">
                 <span>Descuento</span>
